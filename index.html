@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Language Map</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background-color: #f9f9f9; /* Light background for the page */
+        }
+
+        /* Main container that holds everything */
+        .main-container {
+            width: 100%;
+            max-width: 1200px; /* Max width to control everything */
+            padding: 0 20px; /* Add padding so content doesn't touch the edges */
+            margin: 20px auto;
+        }
+
+        /* Map container for the map and button with grey background */
+        .map-container {
+            background-color: #eaeaea; /* Grey background for the map container */
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        /* Sub-container for map and intro */
+        .sub-container {
+            display: flex;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+
+        /* Map section (3/4 of the container width) */
+        #map-section {
+            flex: 3;
+            padding: 0;
+            margin: 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: #fff;
+        }
+
+        /* Intro section (1/4 of the container width) */
+        #intro-section {
+            flex: 1;
+            padding: 20px;
+            background-color: #fff;
+            border-left: 1px solid #ccc;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            margin-left: 20px;
+        }
+
+        /* Map styling */
+        #map {
+            height: 400px;
+            width: 100%;
+        }
+
+        h2 {
+            margin-top: 0;
+            font-size: 1.5rem;
+            color: #333;
+        }
+
+        #city-description {
+            color: #555;
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+
+        /* Styling for audio section in the intro */
+        audio {
+            width: 100%;
+            margin-top: 20px;
+        }
+
+        /* Publications section */
+        #publications {
+            padding: 20px;
+            background-color: #fff;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            max-width: 1200px;
+        }
+
+        #publication-list {
+            font-size: 1rem;
+            color: #333;
+        }
+
+        /* Button to expand the map */
+        #show-big-map-btn {
+            background-color: #007bff;
+            color: white;
+            padding: 8px 16px; /* Make the button smaller */
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: background-color 0.3s ease;
+            text-align: center;
+            display: inline-block;
+            font-size: 0.9rem;
+        }
+
+        #show-big-map-btn:hover {
+            background-color: #0056b3;
+        }
+
+        .big-map-container {
+            display: none;
+        }
+
+        .big-map {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 999;
+        }
+
+        /* Custom marker styles */
+        .highlighted-marker {
+            background-color: yellow;
+            border: 2px solid orange;
+            border-radius: 50%;
+            transition: transform 0.3s ease, background-color 0.3s ease;
+        }
+
+        .normal-marker {
+            background-color: green;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            width: 15px;
+            height: 15px;
+            transition: transform 0.3s ease, background-color 0.3s ease;
+        }
+
+        /* Hover effect to enlarge marker smoothly */
+        .highlighted-marker:hover,
+        .normal-marker:hover {
+            transform: scale(1.3);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Main Container that wraps everything -->
+    <div class="main-container">
+        <!-- Map Container (map and button together) -->
+        <div class="map-container">
+            <!-- Sub-container with map and intro section -->
+            <div class="sub-container">
+                <!-- Map Section -->
+                <div id="map-section">
+                    <div id="map"></div>
+                </div>
+
+                <!-- Introduction Section -->
+                <div id="intro-section">
+                    <h2>City Information</h2>
+                    <p id="city-description">Click on a city marker to see more details here.</p>
+                    <!-- Audio player for the selected city -->
+                    <audio id="audioPlayer" controls style="display: none;">
+                        <source id="audioSource" src="" type="audio/mpeg">
+                        Your browser does not support the audio element.
+                    </audio>
+                </div>
+            </div>
+
+            <!-- Button to Show Big Map (under the map and intro block) -->
+            <button id="show-big-map-btn">Show Big Map</button>
+        </div>
+
+        <!-- Publications Section (below map and intro section) -->
+        <div id="publications">
+            <h2>Publications</h2>
+            <ul id="publication-list">
+                <li>Click on a city to view its related publications.</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Big Map Container (hidden initially) -->
+    <div class="big-map-container" id="big-map-container">
+        <div id="big-map" class="big-map"></div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    
+    <script>
+        // Initialize the small map
+        var map = L.map('map').setView([51.1657, 10.4515], 6); // Centered on Germany
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // Add publications and audio data
+        const publicationsData = {
+            "Leer": ["Publication 1 on Leer dialect", "Publication 2 on Leer linguistics"],
+            "Baden": ["Publication 1 on Baden dialect", "Publication 2 on Baden linguistics"],
+            "Kirchwerder": ["Publication 1 on Kirchwerder dialect", "Publication 2 on Kirchwerder linguistics"],
+            "Altenwerder": ["Publication 1 on Altenwerder dialect", "Publication 2 on Altenwerder linguistics"],
+            "Alfstedt": ["Publication 1 on Alfstedt dialect", "Publication 2 on Alfstedt linguistics"]
+        };
+
+        const audioData = {
+            "Leer": "audio/berlin.mp3",
+            "Baden": "audio/hamburg.mp3",
+            "Kirchwerder": "audio/munich.mp3",
+            "Kirchwerder": "audio/munich.mp3",
+            "Kirchwerder": "audio/munich.mp3"
+        };
+
+        // Function to update city description, publications, and audio
+        function updateCityInfo(city, description) {
+            // Update city description
+            document.getElementById("city-description").innerText = description;
+
+            // Update publications list
+            const publicationList = document.getElementById("publication-list");
+            publicationList.innerHTML = ""; // Clear previous publications
+            if (publicationsData[city]) {
+                publicationsData[city].forEach(pub => {
+                    const li = document.createElement('li');
+                    li.innerText = pub;
+                    publicationList.appendChild(li);
+                });
+            } else {
+                const li = document.createElement('li');
+                li.innerText = "No publications available for this city.";
+                publicationList.appendChild(li);
+            }
+
+            // Update audio source
+            const audioPlayer = document.getElementById("audioPlayer");
+            const audioSource = document.getElementById("audioSource");
+            if (audioData[city]) {
+                audioSource.src = audioData[city];
+                audioPlayer.style.display = 'block'; // Show audio player
+                audioPlayer.load(); // Load the new audio file
+            } else {
+                audioPlayer.style.display = 'none'; // Hide if no audio
+            }
+        }
+
+        // Function to create a marker with hover and click events
+        function createCityMarker(lat, lng, name, description) {
+            var normalIcon = L.divIcon({
+                className: 'normal-marker',
+                iconSize: [15, 15],
+                popupAnchor: [0, -10]
+            });
+
+            var highlightedIcon = L.divIcon({
+                className: 'highlighted-marker',
+                iconSize: [20, 20],
+                popupAnchor: [0, -10]
+            });
+
+            var marker = L.marker([lat, lng], { icon: normalIcon }).addTo(map);
+
+            // Hover effects to change the marker style
+            marker.on('mouseover', function() {
+                marker.setIcon(highlightedIcon);
+            });
+
+            marker.on('mouseout', function() {
+                marker.setIcon(normalIcon);
+            });
+
+            // Click event to update city info in the sidebar, publications, and audio section
+            marker.on('click', function() {
+                updateCityInfo(name, description);
+            });
+        }
+
+        // Add city markers
+        createCityMarker(53.231, 7.4616, "Leer", "Leer is a district in Lower Saxony.");
+        createCityMarker(53.014, 9.0453, "Baden", "Baden is located under Bremen in Achim, Lower Saxony.");
+        createCityMarker(53.4335, 10.1691, "Kirchwerder", "Kirchwerder is a rural area in Hamburg.");
+        createCityMarker(53.489, 9.9732, "Altenwerder", "Altenwerder is a quarter in the Hamburg region.");
+        createCityMarker(53.5261, 9.0976, "Alfstedt", "Alfstedt is a small municipality in Lower Saxony.");
+
+        // Expand the map when "Show Big Map" button is clicked
+        document.getElementById('show-big-map-btn').addEventListener('click', function() {
+            // Hide the normal container, show the big map
+            document.querySelector('.main-container').style.display = 'none';
+            document.getElementById('big-map-container').style.display = 'block';
+            
+            // Initialize the big map
+            var bigMap = L.map('big-map').setView([51.1657, 10.4515], 6); // Centered on Germany
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(bigMap);
+        });
+    </script>
+
+</body>
+</html>
